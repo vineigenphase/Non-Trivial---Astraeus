@@ -22,7 +22,7 @@ Sim up in Terminal 1 (pixi run ros2, wait for full load). Terminal 2:
 Watch: does the rover drive? does terrain actually regen? does sun move?
 does teleport work? Fix before committing the night. Note seconds/episode.
 
-## 3. The overnight batches
+
 k_soil / theta_r are LOAD-TIME yaml params -> 3 batches, 3 sim launches.
 Edit cfg/environment/astraeus_base.yaml between launches (or pre-make 3 yamls):
   batch A: k_soil 0.7 (scale force_depth_regression slopes x0.7), theta_r 0.70
@@ -37,13 +37,13 @@ N: pick from pilot timing. e.g. 40 s/ep -> ~85 ep/batch fits a 3h slot;
 or nohup so the web terminal dropping doesn't kill the run:
     nohup python harness.py ... >> /workspace/astraeus/batchA.out 2>&1 &
 
-## 4. Before sleep + at morning
+
 Download log.csv via Jupyter (right-click -> Download) BOTH times.
 Morning:
     python analyse.py /workspace/astraeus/log.csv
 -> summary.txt + two PNGs = the report's results section. STOP THE POD.
 
-## Honest-reporting notes baked into the design
+
 - GT-pose policy => dust + lighting cannot cause failures. Lighting is swept
   and logged to demonstrate the pipeline; report terrain-axis results as the
   empirical finding, dust/vision as implemented-pending-policy.
