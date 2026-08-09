@@ -1,4 +1,4 @@
-# Astraeus — TONIGHT runbook
+# Astraeus runbook
 
 ## 0. Upload these files (clipboard-free route)
 Open the Jupyter link on port 8888 -> navigate to /workspace -> New folder
