@@ -305,8 +305,8 @@ class Campaign:
         self.outcome = np.concatenate([self.outcome, outcome])
         self.source = np.concatenate([self.source, np.full(len(rows), source, np.int64)])
         for k in self.METRIC_KEYS:
-            col = alias.get(k, k)
-            v = np.array([float(r[col]) if r.get(col) not in (None, "") else np.nan for r in rows])
+            cols = (k, alias.get(k, k))
+            v = np.array([next((float(r[c]) for c in cols if r.get(c) not in (None, "")), np.nan) for r in rows])
             if k == "severity" and np.isnan(v).any():
                 fail = outcome != RV.OUTCOME_CODE["success"]
                 tilt = np.nan_to_num(np.array([float(r.get("max_tilt_deg", 0) or 0) for r in rows]))

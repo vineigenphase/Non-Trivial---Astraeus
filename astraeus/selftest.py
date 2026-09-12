@@ -4,7 +4,6 @@ trusted; none of them is a tuning target.
 """
 from __future__ import annotations
 
-import io
 import sys
 import time
 from typing import Callable, List, Tuple
@@ -121,7 +120,8 @@ def _step():
 # ---------------------------------------------------------------- perception
 @check("visibility falls with dust and rises with sun elevation away from glare")
 def _vis():
-    two = lambda a: np.array([a, a])
+    def two(a):
+        return np.array([a, a])
     v = P.visibility(two(1.5), two(200.0), np.array([0.0, 0.6]), two(1.0), two(0.0))
     assert v[0] > v[1], v
     glare = P.visibility(two(1.5), np.array([0.0, 180.0]), two(0.0), two(1.0), two(0.0))

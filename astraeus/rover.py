@@ -29,7 +29,7 @@ the renderer and the Isaac Sim exporter consume.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -139,14 +139,14 @@ def simulate(X: np.ndarray, seed: np.ndarray, gt_pose: bool = False,
     vo_drift = episode_normals(seed, 2, stream=5) * P.SIGMA_VO_PER_M   # m per m, per axis
 
     # state
-    x = np.zeros(n); y = np.zeros(n); hdg = np.zeros(n)
-    ex = np.zeros(n); ey = np.zeros(n)                   # VO estimate
+    x, y, hdg = np.zeros(n), np.zeros(n), np.zeros(n)
+    ex, ey = np.zeros(n), np.zeros(n)                    # VO estimate
     z_dig = np.zeros(n)
     done = np.zeros(n, bool)
     outcome = np.full(n, OUTCOME_CODE["timeout"], np.int64)
     t_end = np.full(n, T_MAX)
-    max_tilt = np.zeros(n); max_slip = np.zeros(n); max_z = np.zeros(n)
-    min_vis = np.ones(n); sum_vis = np.zeros(n); n_vis = np.zeros(n)
+    max_tilt, max_slip, max_z = np.zeros(n), np.zeros(n), np.zeros(n)
+    min_vis, sum_vis, n_vis = np.ones(n), np.zeros(n), np.zeros(n)
     detected = np.zeros((n, N_ROCK_SLOTS), bool)
     immob_time = np.zeros(n)
     last_check_t = np.zeros(n)
@@ -287,7 +287,9 @@ def simulate(X: np.ndarray, seed: np.ndarray, gt_pose: bool = False,
             full = {}
             for k, arr in (("pitch", pitch), ("roll", roll), ("slip", slip), ("v", v),
                            ("visibility", vis), ("sinkage", ts["z"])):
-                a = np.zeros(n); a[idx] = arr; full[k] = a
+                a = np.zeros(n)
+                a[idx] = arr
+                full[k] = a
             for k, arr in (("t", np.full(n, t)), ("x", x), ("y", y), ("z", zc), ("heading", hdg),
                            ("ex", ex), ("ey", ey)):
                 full[k] = arr.copy()

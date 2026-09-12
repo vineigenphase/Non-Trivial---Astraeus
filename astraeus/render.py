@@ -25,7 +25,7 @@ from __future__ import annotations
 import io
 import math
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import perception as P
 from . import rover as RV
 from .priors import DIMS, UNITS
-from .terrain import GOAL_X, TerrainBatch
+from .terrain import GOAL_X
 
 # --------------------------------------------------------------------------- setup
 DEM_RES = 0.20                       # m per DEM cell for ray marching

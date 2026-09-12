@@ -1,0 +1,23 @@
+# External-simulator campaign settings (standalone_env.py and omnilrs_bridge.py).
+
+sampling:
+  # "proposal": draw x ~ Q (astraeus.priors.PROPOSAL). Rows get source=0 and
+  #             enter the importance-weighted P1..P6 estimates after ingest.
+  # "prior:P2": draw from a single prior. Rows get source=2 (replay/ranking only).
+  # "replay:<run.npz>": re-run the local campaign's (x, seed) pairs in Isaac
+  #             for cross-simulator comparison. source=2.
+  mode: proposal
+  seed: 20260912
+  episodes: 400
+  # load-time dims for OmniLRS (fixed per launched batch); ignored by standalone
+  batch_dims: [k_soil, theta_r, slope_deg]
+  batches: 8
+
+episode:
+  t_max_s: 180.0
+  settle_s: 3.0                  # after teleport/regeneration before commands
+  wall_timeout_s: 400.0          # sim wall clock guard
+
+logging:
+  csv: isaac/out/log.csv
+  frames_dir: isaac/out/frames

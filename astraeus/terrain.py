@@ -21,7 +21,7 @@ highland DEM power spectra at metre scales (see docs/RESEARCH.md).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 
@@ -129,7 +129,6 @@ class TerrainBatch:
               rho_rock: np.ndarray) -> "TerrainBatch":
         """Deterministic in (seed, parameters): no external RNG is consumed."""
         seed = np.asarray(seed, np.int64)
-        n = len(seed)
         r_terrain = np.asarray(r_terrain, float)
         slope = np.radians(np.asarray(slope_deg, float))
         U = episode_uniforms(seed, 1 + 4 * N_CRATERS + 1 + 3 * N_ROCK_SLOTS, stream=1)
@@ -179,7 +178,6 @@ class TerrainBatch:
         """Height (m) at points x, y of shape (n, ...) — one episode per row."""
         x = np.asarray(x, float)
         y = np.asarray(y, float)
-        n = self.n
         h = np.zeros(np.broadcast(x, y).shape)
 
         # regional slope plane: height falls in the downhill direction
