@@ -370,7 +370,8 @@ def _headlights(scene: Scene, p: np.ndarray, n: np.ndarray, d: np.ndarray) -> np
 def _stars(d: np.ndarray, seed: int) -> np.ndarray:
     """Sparse deterministic star field on the sky directions."""
     q = np.floor(d * 420.0).astype(np.int64)
-    hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ (seed * 2654435761)
+    s = np.int64((int(seed) * 2654435761) & 0x7FFFFFFFFFFFFFFF)
+    hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ s
     u = ((hsh & 0xFFFFFF) / float(0xFFFFFF))
     return np.where(u > 0.9994, 0.3 + 1.2 * (u - 0.9994) / 0.0006, 0.0)
 

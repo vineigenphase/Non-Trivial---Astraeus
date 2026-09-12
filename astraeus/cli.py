@@ -106,7 +106,8 @@ def cmd_whatif(a) -> None:
 
 def cmd_ingest(a) -> None:
     c = C.Campaign.load(a.run) if Path(a.run).exists() else C.Campaign(seed=0)
-    n = c.ingest_csv(a.csv, source=0 if a.from_proposal else 2)
+    source = {"csv": None, "proposal": 0, "external": 2}[a.source]
+    n = c.ingest_csv(a.csv, source=source)
     c.save(a.run)
     print(f"ingested {n} rows from {a.csv} -> {a.run} ({c.n} episodes total)")
     C.write_summary_txt(c, Path(a.run).with_suffix(".txt"))
@@ -173,9 +174,12 @@ def main(argv=None) -> None:
     g = sp.add_parser("ingest", help="fold Isaac Sim / OmniLRS harness CSV rows into a run")
     g.add_argument("run")
     g.add_argument("csv")
-    g.add_argument("--from-proposal", action="store_true", default=True,
-                   help="rows were sampled from PROPOSAL (default; enables re-weighting)")
-    g.add_argument("--not-from-proposal", dest="from_proposal", action="store_false")
+    g.add_argument("--source", default="csv", choices=("csv", "proposal", "external"),
+                   help="csv: trust each row's source column (missing -> external); "
+                        "proposal: assert all rows were drawn from PROPOSAL (enter weighted estimates); "
+                        "external: replay/ranking only")
+    g.add_argument("--from-proposal", dest="source", action="store_const", const="proposal")
+    g.add_argument("--not-from-proposal", dest="source", action="store_const", const="external")
     g.set_defaults(fn=cmd_ingest)
 
     s = sp.add_parser("serve", help="FastAPI server + live world model")

@@ -169,8 +169,8 @@ async function loadElites() {
   const tb = $("#elite-table tbody"); tb.innerHTML = "";
   for (const e of d.elites) {
     const tr = document.createElement("tr"); tr.className = "clickable" + (S.current.kind === "episode" && S.current.index === e.index ? " sel" : "");
-    tr.innerHTML = `<td class="num">${e.index}${e.source === "cem" ? "<sup>c</sup>" : ""}</td><td><span class="chip" style="color:${MODE_COL[e.outcome]};border-color:${MODE_COL[e.outcome]}">${e.outcome}</span></td>
-      <td class="num">${fmt(e.severity, 2)}</td><td class="num">${e.source === "cem" ? "<span class='muted'>cem</span>" : e.weight === undefined ? "—" : e.weight.toExponential(1)}</td>
+    tr.innerHTML = `<td class="num">${e.index}${e.source === "cem" ? "<sup>c</sup>" : e.source === "external" ? "<sup>x</sup>" : ""}</td><td><span class="chip" style="color:${MODE_COL[e.outcome]};border-color:${MODE_COL[e.outcome]}">${e.outcome}</span></td>
+      <td class="num">${fmt(e.severity, 2)}</td><td class="num">${e.source !== "mc" ? `<span class="muted">${e.source}</span>` : e.weight === undefined ? "—" : e.weight.toExponential(1)}</td>
       <td class="num">${fmt(e.max_tilt_deg, 1)}</td><td class="num">${fmt(e.max_slip, 2)}</td><td class="num">${fmt(e.min_visibility, 2)}</td>`;
     tr.addEventListener("click", () => openEpisode(e.index));
     tb.appendChild(tr);

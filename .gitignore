@@ -5,3 +5,5 @@ runs/
 renders/
 *.egg-info/
 .venv/
+.ruff_cache/
+isaac/out/

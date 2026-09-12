@@ -205,6 +205,10 @@ def _persist():
         c3 = C.Campaign(seed=1)
         assert c3.ingest_rows(rows) == 10 and c3.n == 10
         assert np.allclose(c3.metrics["severity"], c.metrics["severity"][:10])
+        assert np.all(c3.source == 0), "rows labelled 'mc' must stay proposal rows"
+        ext = [dict(r, source="external") for r in rows[:3]] + [dict(r, source="") for r in rows[3:5]]
+        assert c3.ingest_rows(ext) == 5 and np.all(c3.source[10:] == 2)
+        assert c3.summary()["n_external"] == 5 and c3.prior_report(PR.P1)["n"] == 10
 
 
 # ---------------------------------------------------------------- render
@@ -217,6 +221,9 @@ def _render():
         assert a.shape == (180, 320, 3) and a.std() > 10, cam
     png = RD.to_png_bytes(im)
     assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 2000
+    # campaign seeds are seed*1e6+i; the renderer's hashes must survive them
+    big = RV.simulate_one(np.array([2.0, 0.72, 1.0, 4.0, 5.0, 1.5, 200.0, 0.1]), 20260912001568)
+    RD.render_episode(big, size=(160, 90), quality=3)
 
 
 def main(verbose: bool = True) -> int:

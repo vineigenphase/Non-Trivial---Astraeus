@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astraeus"
+version = "2.0.0"
+description = "Open adversarial stress-testing framework for off-world autonomy under unknown disturbance priors"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "pillow>=10.0"]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "pydantic>=2.0"]
+isaac = ["pyyaml>=6.0"]
+reactor = ["reactor-sdk>=1.5"]
+dev = ["pytest>=8.0", "ruff>=0.5", "pyyaml>=6.0"]
+
+[project.scripts]
+astraeus = "astraeus.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["astraeus*"]
+
+[tool.setuptools.package-data]
+astraeus = ["static/*"]
+
+[tool.ruff]
+line-length = 130
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

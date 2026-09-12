@@ -23,7 +23,6 @@ passed; run discover_topics.py first.
 from __future__ import annotations
 
 import argparse
-import importlib
 import math
 import sys
 import time
@@ -34,6 +33,7 @@ import numpy as np
 import rclpy
 import yaml
 from rclpy.node import Node
+from rosidl_runtime_py.utilities import get_message
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
@@ -45,9 +45,8 @@ from astraeus_isaac.scene import DIMS, sun_direction                 # noqa: E40
 
 
 def msg_class(type_str: str):
-    """'geometry_msgs/msg/Twist' -> class, without importing every message package up front."""
-    pkg, _, name = type_str.split("/")
-    return getattr(importlib.import_module(f"{pkg}.msg"), name)
+    """'geometry_msgs/msg/Twist' -> message class (same resolver `ros2 topic pub` uses)."""
+    return get_message(type_str)
 
 
 def quat_from_dir(d: Tuple[float, float, float]) -> Tuple[float, float, float, float]:

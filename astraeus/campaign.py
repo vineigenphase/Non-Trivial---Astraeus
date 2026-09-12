@@ -24,6 +24,23 @@ from . import rover as RV
 from .priors import DIMS, N_DIMS, Prior
 
 MIN_ESS = 30.0            # below this a prior's estimate is reported as unreliable
+SOURCE_LABEL = {0: "mc", 1: "cem", 2: "external"}   # 0 = drawn from q, 1 = CEM search, 2 = external / not from q
+SOURCE_CODE = {v: k for k, v in SOURCE_LABEL.items()}
+
+
+def parse_source(v: object, default: int = 2) -> int:
+    """Accept 0/1/2 or mc/cem/external from a CSV cell; blank -> default."""
+    s = str(v).strip().lower() if v is not None else ""
+    if s == "":
+        return default
+    if s in SOURCE_CODE:
+        return SOURCE_CODE[s]
+    code = int(float(s))
+    if code not in SOURCE_LABEL:
+        raise ValueError(f"unknown source {v!r}")
+    return code
+
+
 BOOT = 400                # bootstrap replicates for the interval on P(fail)
 
 
@@ -228,7 +245,7 @@ class Campaign:
     def episode(self, i: int) -> Dict[str, object]:
         d = {k: float(v) for k, v in zip(DIMS, self.X[i])}
         d.update({"index": int(i), "seed": int(self.seeds[i]), "outcome": RV.OUTCOMES[int(self.outcome[i])],
-                  "source": "cem" if self.source[i] == 1 else "mc"})
+                  "source": SOURCE_LABEL[int(self.source[i])]})
         for k in self.METRIC_KEYS:
             d[k] = float(self.metrics[k][i])
         return d
@@ -284,14 +301,16 @@ class Campaign:
             }
 
     # ------------------------------------------------------------- external
-    def ingest_rows(self, rows: Sequence[Dict[str, object]], source: int = 0) -> int:
+    def ingest_rows(self, rows: Sequence[Dict[str, object]], source: Optional[int] = None) -> int:
         """Fold in episodes simulated elsewhere (Isaac Sim / OmniLRS harness CSV).
 
         Rows must carry the eight DIMS columns plus `seed` and `outcome`; any
         metric columns present are kept, missing ones are NaN. `source=0`
         asserts the rows were drawn from PROPOSAL, so they enter the weighted
-        estimates; use `source=2` for rows sampled any other way (kept for
-        replay/ranking only, like CEM samples).
+        estimates; `source=2` marks rows sampled any other way (kept for
+        replay/ranking only, like CEM samples). `source=None` trusts each
+        row's own `source` column (what the Isaac side writes), treating a
+        missing column as external (2).
         """
         rows = [r for r in rows if str(r.get("outcome", "")) in RV.OUTCOME_CODE]
         if not rows:
@@ -303,7 +322,11 @@ class Campaign:
         self.X = np.vstack([self.X, X])
         self.seeds = np.concatenate([self.seeds, seeds])
         self.outcome = np.concatenate([self.outcome, outcome])
-        self.source = np.concatenate([self.source, np.full(len(rows), source, np.int64)])
+        if source is None:
+            src = np.array([parse_source(r.get("source")) for r in rows], np.int64)
+        else:
+            src = np.full(len(rows), source, np.int64)
+        self.source = np.concatenate([self.source, src])
         for k in self.METRIC_KEYS:
             cols = (k, alias.get(k, k))
             v = np.array([next((float(r[c]) for c in cols if r.get(c) not in (None, "")), np.nan) for r in rows])
@@ -317,7 +340,7 @@ class Campaign:
             self.metrics[k] = np.concatenate([self.metrics.get(k, np.zeros(0)), v])
         return len(rows)
 
-    def ingest_csv(self, path: Path, source: int = 0) -> int:
+    def ingest_csv(self, path: Path, source: Optional[int] = None) -> int:
         with open(path, newline="") as fh:
             return self.ingest_rows(list(csv.DictReader(fh)), source=source)
 
