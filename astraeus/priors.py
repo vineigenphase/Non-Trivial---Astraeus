@@ -69,6 +69,13 @@ SIM_DEFAULTS: Dict[str, float] = {
     "slope_deg": 3.0, "sun_e": 45.0, "sun_psi": 180.0, "tau_dust": 0.0,
 }
 
+# A benign, in-support south-polar operating point (centre of P2). Used as the
+# baseline for what-if / sensitivity sweeps.
+NOMINAL_X: Dict[str, float] = {
+    "k_soil": 2.0, "theta_r": 0.724, "r_terrain": 1.0, "rho_rock": 2.0,
+    "slope_deg": 4.0, "sun_e": 1.5, "sun_psi": 200.0, "tau_dust": 0.05,
+}
+
 
 # --------------------------------------------------------------------------
 # marginals

@@ -604,6 +604,9 @@ def _draw_hud(im: Image.Image, s: Scene, camera: str) -> None:
 
 
 # --------------------------------------------------------------------------- helpers
+CAMERAS = ("chase", "rover_cam", "overview", "orbit")
+
+
 def to_png_bytes(im: Image.Image) -> bytes:
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
@@ -616,7 +619,7 @@ def render_episode(res: RV.EpisodeResult, camera: str = "chase", frame: int = -1
 
 
 def render_contact_sheet(res: RV.EpisodeResult, n: int = 6, size: Tuple[int, int] = (640, 360),
-                         camera: str = "chase") -> Image.Image:
+                         camera: str = "chase", quality: int = 1) -> Image.Image:
     """n frames through the episode, tiled 3 wide."""
     assert res.trace is not None
     T = res.trace["x"].shape[1]
@@ -625,6 +628,6 @@ def render_contact_sheet(res: RV.EpisodeResult, n: int = 6, size: Tuple[int, int
     rows = int(math.ceil(n / cols))
     sheet = Image.new("RGB", (size[0] * cols, size[1] * rows), (0, 0, 0))
     for k, fr in enumerate(frames):
-        im = render_episode(res, camera, int(fr), size, quality=1)
+        im = render_episode(res, camera, int(fr), size, quality=quality)
         sheet.paste(im, ((k % cols) * size[0], (k // cols) * size[1]))
     return sheet

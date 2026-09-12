@@ -10,6 +10,7 @@ produced whichever front end is used.
 """
 from __future__ import annotations
 
+import csv
 import json
 import time
 from dataclasses import dataclass, field
@@ -281,6 +282,44 @@ class Campaign:
                 "best": best,
                 "modes": {m: int((res.outcome == RV.OUTCOME_CODE[m]).sum()) for m in RV.OUTCOMES},
             }
+
+    # ------------------------------------------------------------- external
+    def ingest_rows(self, rows: Sequence[Dict[str, object]], source: int = 0) -> int:
+        """Fold in episodes simulated elsewhere (Isaac Sim / OmniLRS harness CSV).
+
+        Rows must carry the eight DIMS columns plus `seed` and `outcome`; any
+        metric columns present are kept, missing ones are NaN. `source=0`
+        asserts the rows were drawn from PROPOSAL, so they enter the weighted
+        estimates; use `source=2` for rows sampled any other way (kept for
+        replay/ranking only, like CEM samples).
+        """
+        rows = [r for r in rows if str(r.get("outcome", "")) in RV.OUTCOME_CODE]
+        if not rows:
+            return 0
+        X = np.array([[float(r[d]) for d in DIMS] for r in rows])
+        seeds = np.array([int(r.get("seed", -1)) for r in rows], np.int64)
+        outcome = np.array([RV.OUTCOME_CODE[str(r["outcome"])] for r in rows], np.int64)
+        alias = {"max_sinkage": "max_sinkage_m", "vo_error": "vo_error_m"}
+        self.X = np.vstack([self.X, X])
+        self.seeds = np.concatenate([self.seeds, seeds])
+        self.outcome = np.concatenate([self.outcome, outcome])
+        self.source = np.concatenate([self.source, np.full(len(rows), source, np.int64)])
+        for k in self.METRIC_KEYS:
+            col = alias.get(k, k)
+            v = np.array([float(r[col]) if r.get(col) not in (None, "") else np.nan for r in rows])
+            if k == "severity" and np.isnan(v).any():
+                fail = outcome != RV.OUTCOME_CODE["success"]
+                tilt = np.nan_to_num(np.array([float(r.get("max_tilt_deg", 0) or 0) for r in rows]))
+                slip = np.nan_to_num(np.array([float(r.get("max_slip", 0) or 0) for r in rows]))
+                vis = np.nan_to_num(np.array([float(r.get("min_visibility", 1) or 1) for r in rows]), nan=1.0)
+                dist = np.nan_to_num(np.array([float(r.get("final_dist", 0) or 0) for r in rows]))
+                v = np.where(np.isnan(v), RV.severity_score(fail, tilt, slip, vis, dist), v)
+            self.metrics[k] = np.concatenate([self.metrics.get(k, np.zeros(0)), v])
+        return len(rows)
+
+    def ingest_csv(self, path: Path, source: int = 0) -> int:
+        with open(path, newline="") as fh:
+            return self.ingest_rows(list(csv.DictReader(fh)), source=source)
 
     # ----------------------------------------------------------- persistence
     def to_rows(self) -> List[Dict[str, object]]:
