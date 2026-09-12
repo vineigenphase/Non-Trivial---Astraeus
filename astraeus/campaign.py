@@ -345,7 +345,8 @@ class Campaign:
     def summary(self) -> Dict[str, object]:
         mc = self.source == 0
         return {
-            "n_total": self.n, "n_mc": int(mc.sum()), "n_cem": int((~mc).sum()),
+            "n_total": self.n, "n_mc": int(mc.sum()), "n_cem": int((self.source == 1).sum()),
+            "n_external": int((self.source == 2).sum()),
             "gt_pose": self.gt_pose, "elapsed_s": round(self.elapsed_s, 2),
             "episodes_per_s": round(self.n / self.elapsed_s, 1) if self.elapsed_s > 0 else None,
             "raw_fail_rate_q": round(float(self.fail[mc].mean()), 4) if mc.any() else None,
@@ -356,8 +357,10 @@ class Campaign:
 
 def write_summary_txt(c: Campaign, path: Path) -> None:
     """Human-readable report in the spirit of the v1 analyse.py summary."""
+    n_ext = int((c.source == 2).sum())
     lines = [f"Astraeus campaign — {c.n} episodes ({int((c.source == 0).sum())} MC, "
-             f"{int((c.source == 1).sum())} CEM), gt_pose={c.gt_pose}, {c.elapsed_s:.1f} s sim", ""]
+             f"{int((c.source == 1).sum())} CEM" + (f", {n_ext} external" if n_ext else "")
+             + f"), gt_pose={c.gt_pose}, {c.elapsed_s:.1f} s sim", ""]
     for r in c.all_priors():
         if r["support_coverage"] < 0.5:
             flag = "   [%.0f%% of this prior lies outside the simulated support — not estimable]" % (

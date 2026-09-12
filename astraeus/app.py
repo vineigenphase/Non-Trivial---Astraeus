@@ -418,7 +418,8 @@ async def api_cem(body: CemBody) -> JSONResponse:
 async def api_internals() -> JSONResponse:
     c = STATE.campaign
     mc = c.source == 0
-    out: Dict[str, Any] = {"n": c.n, "n_mc": int(mc.sum()), "n_cem": int((~mc).sum()),
+    out: Dict[str, Any] = {"n": c.n, "n_mc": int(mc.sum()), "n_cem": int((c.source == 1).sum()),
+                           "n_external": int((c.source == 2).sum()),
                            "busy": STATE.busy, "log": STATE.log[-60:], "cem": STATE.cem_history,
                            "min_ess": C.MIN_ESS, "priors": {}, "marginals": {}, "sample": None}
     rng = np.random.default_rng(7)
