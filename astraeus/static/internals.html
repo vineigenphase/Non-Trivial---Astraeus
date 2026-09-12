@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Astraeus — internals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  main.internals { display: block; height: auto; padding: 14px 18px; max-width: 1500px; margin: 0 auto; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .marg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  canvas.chart.tall { height: 170px; }
+  pre { background: #0a0e14; border: 1px solid var(--line); border-radius: 4px; padding: 8px; font-size: 11px; overflow: auto; max-height: 260px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ASTRAEUS <span>internals — how the numbers on the front page are made</span></h1>
+  <nav><span id="b-n" class="badge">n = 0</span><a href="/">world model</a><button id="btn-refresh">refresh</button></nav>
+</header>
+<main class="internals">
+  <div class="panel">
+    <h2>Estimator</h2>
+    <div class="small">
+      Every episode is drawn from one proposal <span class="mono">q = 0.4·P1 + 0.15·(P2 + P4 + P5 + P6)</span> and simulated once, deterministically in (x, seed).
+      For each candidate prior p the campaign reports the self-normalised importance estimate
+      <span class="mono">P̂(fail) = Σ wᵢ 1[failᵢ] / Σ wᵢ</span>, <span class="mono">wᵢ = p(xᵢ)/q(xᵢ)</span>,
+      with a bootstrap 95 % CI over episodes and the Kish effective sample size <span class="mono">ESS = (Σw)² / Σw²</span>.
+      An estimate is marked <b>reliable</b> only if ESS ≥ <span id="min-ess" class="mono"></span> <i>and</i> at least half of p's own mass lies inside the simulated box (support coverage).
+      CEM samples are kept in the campaign for replay but never enter these weighted estimates.
+    </div>
+  </div>
+
+  <div class="cols" style="margin-top:12px">
+    <div class="panel">
+      <h2>Per-prior report</h2>
+      <table id="rep"><thead><tr><th>prior</th><th>coverage</th><th>ESS</th><th>ESS/n</th><th>max wᵢ / Σw</th><th>P(fail)</th><th>95 % CI</th><th>reliable</th></tr></thead><tbody></tbody></table>
+      <div class="small muted" style="margin-top:6px">max wᵢ/Σw near 1 means a single episode carries the estimate — the classic importance-sampling failure. P3 (simulator default) puts its sun at 45°, outside the polar box: coverage ≈ 0, so its row is a statement about the mismatch, not a rate.</div>
+    </div>
+    <div class="panel">
+      <h2>log₁₀ importance-weight histograms <span class="right"><select id="w-prior"></select></span></h2>
+      <canvas id="w-hist" class="chart tall"></canvas>
+      <div class="small muted" style="margin-top:6px">Weights of the proposal samples under the selected prior (mean 1). A long right tail = few episodes dominate.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:12px">
+    <h2>Marginals: candidate priors vs proposal <span class="right"><select id="m-prior"></select></span></h2>
+    <div class="marg" id="marg"></div>
+    <div class="small muted" style="margin-top:6px">Grey = proposal q, colour = selected prior p, on the simulator's physical bounds. Wherever p has mass and q has ~none, weights blow up; wherever p has mass outside the box (P3's sun), nothing can be recovered.</div>
+  </div>
+
+  <div class="cols" style="margin-top:12px">
+    <div class="panel">
+      <h2>Failure geometry <span class="right"><select id="sx"></select> × <select id="sy"></select></span></h2>
+      <canvas id="scatter" class="chart" style="height:340px"></canvas>
+      <div class="small muted" style="margin-top:6px">Up to 2 500 proposal episodes; red = failure, coloured by mode (stuck red, tip amber, collision violet, nav-miss blue), grey = success.</div>
+    </div>
+    <div class="panel">
+      <h2>CEM traces</h2>
+      <div id="cem"></div>
+      <h2 style="margin-top:12px">Engine log</h2>
+      <pre id="log"></pre>
+    </div>
+  </div>
+</main>
+<script src="/static/internals.js"></script>
+</body>
+</html>

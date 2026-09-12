@@ -55,6 +55,7 @@ WHEEL = Wheel()
 Z_CRIT_FRACTION = 0.5
 DIG_GAIN = 0.016              # m of sinkage per (unit i^2 * m of commanded travel)
 I_MAX = 0.92                  # slip beyond which we declare immobilisation
+RELAX_LENGTHS = 2.0           # contact lengths of fresh-soil travel that erase a rut
 
 
 def static_sinkage(W: np.ndarray, k_soil: np.ndarray, soil: Soil = NOMINAL_SOIL,
@@ -143,8 +144,11 @@ def step_wheel_soil(mass: float, pitch: np.ndarray, k_soil: np.ndarray, phi: np.
     slip, immobilised = required_slip(demand, H, L, soil.K)
 
     v_eff = v_cmd * (1.0 - slip)
-    # excavation while slipping: rate ∝ i^2 * commanded travel
-    z_dig_new = z_dig + DIG_GAIN * slip * slip * np.abs(v_cmd) * dt
+    # excavation while slipping: rate ∝ i^2 * commanded travel. Dug depth is
+    # local to the rut, so it relaxes as the wheel rolls onto fresh soil over
+    # ~RELAX_LENGTHS contact lengths; the spiral only closes once v_eff -> 0.
+    fresh = np.exp(-np.abs(v_eff) * dt / np.maximum(RELAX_LENGTHS * L, 1e-3))
+    z_dig_new = z_dig * fresh + DIG_GAIN * slip * slip * np.abs(v_cmd) * dt
     entrapped = (z0 + z_dig_new) > Z_CRIT_FRACTION * wheel.radius
     return {"v": v_eff, "slip": slip, "z": z0 + z_dig_new, "z_dig": z_dig_new,
             "R_c": R_c, "H_max": H, "demand": demand,
