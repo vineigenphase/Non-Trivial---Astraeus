@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Astraeus — adversarial stress testing for off-world rovers</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>ASTRAEUS <span>adversarial stress testing · off-world rover autonomy · unknown disturbance priors</span></h1>
+  <nav>
+    <span id="b-provider" class="badge">provider …</span>
+    <span id="b-n" class="badge">n = 0</span>
+    <span id="b-ws" class="badge">ws</span>
+    <a href="/internals">internals</a>
+    <a href="https://github.com/vineigenphase/Non-Trivial---Astraeus" target="_blank" rel="noopener">source</a>
+  </nav>
+</header>
+
+<main>
+  <!-- ------------------------------------------------------------ left -->
+  <section class="col left">
+    <div class="panel" id="p-dims">
+      <h2>Disturbance x ∈ R⁸ <span class="right muted" id="x-source">what-if</span></h2>
+      <div id="dims"></div>
+      <div class="row" style="margin-top:8px">
+        <select id="sample-prior"></select>
+        <button id="btn-sample">sample x ~ p</button>
+        <label class="small muted">seed <input id="seed" type="number" value="0" min="0" style="width:64px"></label>
+        <button id="btn-resim" class="primary">simulate</button>
+      </div>
+      <div class="small muted" style="margin-top:6px">Moving a slider re-simulates the episode (0.1–0.6 s on a laptop CPU). Deterministic in (x, seed).</div>
+    </div>
+
+    <div class="panel" id="p-campaign">
+      <h2>Campaign <span class="right" id="c-status"></span></h2>
+      <div class="row">
+        <label class="small muted">episodes <input id="run-n" type="number" value="1000" min="50" max="20000" step="50"></label>
+        <button id="btn-run" class="primary">run</button>
+        <button id="btn-reset">reset</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="small muted">name <input id="run-name" type="text" value="campaign" style="width:110px" title="runs/&lt;name&gt;.npz"></label>
+        <button id="btn-save">save</button>
+        <button id="btn-load">load</button>
+      </div>
+      <div class="progress"><i id="run-prog"></i></div>
+      <div class="table-wrap" style="margin-top:8px"><table id="prior-table">
+        <thead><tr><th>prior</th><th>P(fail)</th><th>95% CI</th><th>ESS</th><th>top mode</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="small muted" style="margin-top:6px">One proposal campaign q = 0.4 P1 + 0.15 (P2+P4+P5+P6); every prior is answered by re-weighting w ∝ p/q. Rows are greyed when ESS &lt; 30 or the prior lies outside the simulated support.</div>
+    </div>
+
+    <div class="panel" id="p-cem">
+      <h2>Adversarial search (CEM) <span class="right" id="cem-status"></span></h2>
+      <div class="row">
+        <select id="cem-prior"></select>
+        <label class="small muted">iters <input id="cem-iters" type="number" value="6" min="1" max="40" style="width:52px"></label>
+        <label class="small muted">batch <input id="cem-batch" type="number" value="200" min="20" max="2000" style="width:64px"></label>
+        <button id="btn-cem" class="primary">search</button>
+      </div>
+      <canvas id="cem-chart" class="chart" style="margin-top:8px"></canvas>
+      <div id="cem-best" class="small mono muted" style="margin-top:4px"></div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- centre -->
+  <section id="world-wrap">
+    <canvas id="world"></canvas>
+    <div class="overlay" id="hud-tl">
+      <div class="outcome driving" id="hud-outcome">—</div>
+      <div id="hud-ep" class="muted"></div>
+    </div>
+    <div class="overlay" id="hud-tr"><div id="hud-tele"></div></div>
+    <div class="overlay legend" id="hud-bl">
+      <div><span style="background:#19bff2"></span>true path</div>
+      <div><span style="background:#ff8c1a"></span>VO estimate</div>
+      <div><span style="background:#59ff73"></span>goal ring (1.5 m)</div>
+      <div><span style="background:#ffe699"></span>sun vector</div>
+    </div>
+    <div class="overlay" id="hud-br">
+      <label class="small"><input type="checkbox" id="cam-follow"> follow rover</label>
+      <div class="small muted">drag: orbit · shift-drag: pan · wheel: zoom</div>
+    </div>
+    <div id="timeline">
+      <button id="btn-play">▶</button>
+      <input type="range" id="frame" min="0" max="0" value="0">
+      <span class="mono small" id="frame-label">0 / 0</span>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- right -->
+  <section class="col right">
+    <div class="panel">
+      <h2>Rendered frame <span class="right" id="frame-provider"></span></h2>
+      <img id="frame-img" alt="rendered frame">
+      <div id="frame-meta"></div>
+      <div class="row" style="margin-top:6px">
+        <select id="camera"><option>chase</option><option>rover_cam</option><option>overview</option><option>orbit</option></select>
+        <select id="quality"><option value="2">fast</option><option value="1">full</option></select>
+        <button id="btn-render">render this frame</button>
+        <button id="btn-sheet">contact sheet</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Distribution shift <span class="right muted small">failure-mode mass by prior</span></h2>
+      <div id="shift"></div>
+      <div id="shift-note" class="small muted" style="margin-top:6px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Elite failures <span class="right"><select id="elite-prior"></select></span></h2>
+      <div class="table-wrap"><table id="elite-table">
+        <thead><tr><th>#</th><th>mode</th><th>sev</th><th>w</th><th>tilt°</th><th>slip</th><th>vis</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div class="small muted" style="margin-top:6px">Ranked by severity + log-plausibility under the selected prior. Click to replay.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Sensitivity <span class="right"><span class="muted small">P(fail | dim) under</span> <select id="sens-prior"></select></span></h2>
+      <div class="grid4" id="sens"></div>
+    </div>
+  </section>
+
+  <div id="log"></div>
+</main>
+
+<script src="/static/gl.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

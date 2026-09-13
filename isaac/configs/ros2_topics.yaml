@@ -1,0 +1,71 @@
+# ROS 2 topic map used by isaac/omnilrs_bridge.py.
+#
+# These names follow the OmniLRS "Lunaryard" ROS 2 interface as read from its
+# source (ros2_lunaryard.py / ros2_base.py) and the rover bring-up used in the
+# original harness. They were NOT verified against a running simulator in
+# this repository's CI, because Isaac Sim is not available there. Before any
+# campaign:
+#
+#     python isaac/discover_topics.py --config isaac/configs/ros2_topics.yaml
+#
+# lists every topic + type from `ros2 topic list -t`, diffs it against this
+# file and refuses to mark the map verified until every entry matches.
+#
+# type strings are ROS 2 "pkg/msg/Name".
+
+verified: false
+
+topics:
+  odom:
+    name: /husky/odom
+    type: nav_msgs/msg/Odometry
+    role: rover ground-truth or wheel odometry (see bridge --gt-pose)
+  cmd_vel:
+    name: /husky/cmd_vel
+    type: geometry_msgs/msg/Twist
+    role: velocity command to the rover
+  imu:
+    name: /husky/imu/data
+    type: sensor_msgs/msg/Imu
+    role: attitude for tip-over detection (falls back to odom orientation)
+  teleport:
+    name: /Lunaryard/Robots/Teleport
+    type: geometry_msgs/msg/PoseStamped
+    role: reset rover pose at episode start
+  reset:
+    name: /Lunaryard/Robots/Reset
+    type: std_msgs/msg/String
+    role: reset robot joint/velocity state
+  sun_pose:
+    name: /Lunaryard/Sun/Pose
+    type: geometry_msgs/msg/Pose
+    role: sun orientation (quaternion; elevation/azimuth mapped by the bridge)
+  sun_intensity:
+    name: /Lunaryard/Sun/Intensity
+    type: std_msgs/msg/Float32
+    role: sun intensity; the bridge scales it by exp(-1.3 tau_dust)
+  terrain_randomize:
+    name: /Lunaryard/Terrain/Randomize
+    type: std_msgs/msg/Int32
+    role: regenerate procedural terrain with a seed
+  rocks_randomize:
+    name: /Lunaryard/Terrain/RandomizeRocks
+    type: std_msgs/msg/Int32
+    role: re-scatter rocks (count set from rho_rock via rocks_density)
+  rocks_density:
+    name: /Lunaryard/Terrain/RocksDensity
+    type: std_msgs/msg/Float32
+    role: rocks per 100 m^2 (if the sim exposes it; otherwise leave verified=false and note the gap)
+  contacts:
+    name: /husky/contact_sensor
+    type: std_msgs/msg/Bool
+    role: body-rock contact flag for collision outcome (optional)
+
+# Load-time parameters that OmniLRS reads from its YAML at launch and cannot be
+# changed live. The batch runner rewrites this file per batch and relaunches.
+batch_yaml:
+  path: /workspace/OmniLRS/cfg/environment/lunaryard_astraeus.yaml
+  keys:
+    k_soil: physics.ground.stiffness_scale
+    theta_r: physics.ground.friction_angle_rad
+    slope_deg: terrain.regional_slope_deg

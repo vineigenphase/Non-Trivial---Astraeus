@@ -1,0 +1,63 @@
+# Standalone Isaac Sim scene for Astraeus (isaac/standalone_env.py).
+# Everything the disturbance vector does NOT set lives here.
+
+app:
+  headless: true
+  renderer: RayTracedLighting        # or PathTracing for stills; ~10x slower
+  width: 1280
+  height: 720
+  physics_dt: 0.00833                # 120 Hz
+  rendering_dt: 0.0333               # 30 Hz
+  substeps: 2
+
+terrain:
+  res_m: 0.10                        # heightfield cell
+  margin_m: 6.0                      # extra terrain around the corridor
+  material_usd: ""                   # optional MDL/USD regolith material; blank = grey PreviewSurface
+  albedo: [0.12, 0.115, 0.11]        # mature highland regolith, normal-albedo ~0.12
+
+rocks:
+  mesh_usd: ""                       # optional rock asset; blank = displaced spheres
+  albedo: [0.16, 0.155, 0.15]
+
+rover:
+  # Either a USD articulation (recommended: your rover, or Isaac's Carter/Jackal
+  # as a stand-in) or the built-in rigid-body 4-wheel proxy.
+  usd_path: ""                       # e.g. omniverse://localhost/Library/viper.usd
+  prim_path: /World/Rover
+  mass_kg: 430.0
+  wheel_radius_m: 0.25
+  wheel_width_m: 0.20
+  half_wheelbase_m: 0.9
+  half_track_m: 0.7
+  clearance_m: 0.30
+  wheel_joint_names: [fl_wheel_joint, fr_wheel_joint, rl_wheel_joint, rr_wheel_joint]
+  max_wheel_torque_nm: 60.0
+  start_xy: [0.0, 0.0]
+  start_z_offset_m: 0.35
+
+controller:
+  v_max: 0.5
+  w_max: 0.6
+  k_ang: 1.6
+  arrive_tol_m: 0.5
+  gt_pose: false                     # false = use odometry-with-drift proxy (see docs); true = ground truth
+  vo_drift_per_m: 0.02               # only used when gt_pose is false
+
+camera:
+  prim_path: /World/Rover/mast_cam
+  offset_xyz: [0.55, 0.0, 1.10]      # from rover base, metres
+  pitch_deg: -12.0
+  focal_mm: 18.0
+  exposure_ev_polar: 12.0            # low sun -> long exposure; glare handled by tone-mapper
+  write_frames: false                # dump RGB to out/frames/<episode>/ (slow)
+  frame_every_s: 2.0
+
+physics:
+  gravity_m_s2: 1.62
+  ground_contact_offset_m: 0.02
+  gpu_dynamics: true
+
+output:
+  dir: isaac/out
+  csv: isaac/out/standalone_log.csv
