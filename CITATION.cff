@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Astraeus in academic work, please cite it as below."
+title: "Astraeus: adversarial stress testing of off-world rover autonomy under unknown disturbance priors"
+type: software
+version: 2.0.0
+date-released: 2026-09-12
+license: MIT
+repository-code: "https://github.com/vineigenphase/Non-Trivial---Astraeus"
+authors:
+  - family-names: Vinujan
+    given-names: S.
+    email: svinujan10@gmail.com
+keywords:
+  - adaptive stress testing
+  - importance sampling
+  - distribution shift
+  - lunar rover
+  - terramechanics
+  - autonomy validation
+  - cross-entropy method
+abstract: >-
+  Astraeus simulates thousands of autonomous rover traverses under an eight-dimensional
+  disturbance vector (soil, terrain, rocks, slope, illumination, dust), re-weights one
+  defensive-mixture Monte-Carlo campaign under six competing environmental priors with
+  explicit effective-sample-size and support-coverage gates, searches adversarially for
+  the most plausible failures with the cross-entropy method, and renders every episode
+  in a deterministic software renderer and a live WebGL world model.

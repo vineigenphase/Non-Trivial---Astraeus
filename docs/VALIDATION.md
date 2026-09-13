@@ -107,6 +107,19 @@ Generated from the same run by `python scripts/make_renders.py runs/val.npz --pr
 Episode indices ≥ 4000 are CEM rows (`source=1`); they are legitimate replayable failures but are not
 part of the estimates in §2.1.
 
+The README showcase assets come from the same run via
+`python scripts/make_showcase.py runs/val.npz --hero-episode 111` (2× supersampled, clean caption
+instead of the HUD). Selection is photogenic (low but not grazing sun, light dust, visible rocks), not
+statistical:
+
+| File | Episode | Seed | Camera |
+|------|---------|------|--------|
+| `hero.png`, `gallery_stuck.png`, `demo.webp` | #111 stuck (proposal row) | 20260912000111 | cinematic / cinematic / chase, 40 frames |
+| `gallery_tip_over.png`  | #675 tip_over (proposal row)   | 20260912000675 | chase |
+| `gallery_collision.png` | #4363 collision (CEM row)      | 20260912004363 | rover_cam |
+| `gallery_nav_miss.png`  | #4686 nav_miss (CEM row)       | 20260912004686 | overview |
+| `gallery_success.png`   | #18 success (proposal row)     | 20260912000018 | cinematic |
+
 ## 3. Web application
 
 Manually exercised on the same commit with `uvicorn astraeus.app:app --port 8000`:

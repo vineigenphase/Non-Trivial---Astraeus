@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint · tests · selftest (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - name: ruff
+        run: python -m ruff check --select E,F,W --line-length 130 astraeus isaac tests scripts
+      - name: compile all entry points (incl. Isaac scripts that need the Isaac runtime to execute)
+        run: python -m compileall -q astraeus isaac tests legacy scripts
+      - name: pytest
+        run: python -m pytest tests -q
+      - name: selftest (19 physical / statistical invariants)
+        run: python -m astraeus selftest
+
+  server:
+    name: server smoke test
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: boot uvicorn and hit the API
+        run: |
+          python -m uvicorn astraeus.app:app --port 8000 --log-level warning &
+          for i in $(seq 1 30); do curl -sf localhost:8000/api/health && break; sleep 1; done
+          curl -sf localhost:8000/api/health
+          curl -sf localhost:8000/api/priors | head -c 300; echo
+          curl -sf -X POST localhost:8000/api/simulate -H 'content-type: application/json' \
+            -d '{"x":{"k_soil":2,"theta_r":0.724,"r_terrain":1,"rho_rock":2,"slope_deg":4,"sun_e":1.5,"sun_psi":200,"tau_dust":0.05},"seed":0}' \
+            | head -c 300; echo
+          curl -sf -o /tmp/frame.png "localhost:8000/api/whatif/frame.png?k_soil=2&theta_r=0.724&r_terrain=1&rho_rock=2&slope_deg=4&sun_e=1.5&sun_psi=200&tau_dust=0.05&w=320&h=180&q=2"
+          python -c "from PIL import Image; im=Image.open('/tmp/frame.png'); assert im.size==(320,180), im.size; print('frame', im.size)"
