@@ -39,13 +39,17 @@
         <label class="small muted">episodes <input id="run-n" type="number" value="1000" min="50" max="20000" step="50"></label>
         <button id="btn-run" class="primary">run</button>
         <button id="btn-reset">reset</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="small muted">name <input id="run-name" type="text" value="campaign" style="width:110px" title="runs/&lt;name&gt;.npz"></label>
         <button id="btn-save">save</button>
+        <button id="btn-load">load</button>
       </div>
       <div class="progress"><i id="run-prog"></i></div>
-      <table id="prior-table" style="margin-top:8px">
+      <div class="table-wrap" style="margin-top:8px"><table id="prior-table">
         <thead><tr><th>prior</th><th>P(fail)</th><th>95% CI</th><th>ESS</th><th>top mode</th></tr></thead>
         <tbody></tbody>
-      </table>
+      </table></div>
       <div class="small muted" style="margin-top:6px">One proposal campaign q = 0.4 P1 + 0.15 (P2+P4+P5+P6); every prior is answered by re-weighting w ∝ p/q. Rows are greyed when ESS &lt; 30 or the prior lies outside the simulated support.</div>
     </div>
 
@@ -109,10 +113,10 @@
 
     <div class="panel">
       <h2>Elite failures <span class="right"><select id="elite-prior"></select></span></h2>
-      <table id="elite-table">
+      <div class="table-wrap"><table id="elite-table">
         <thead><tr><th>#</th><th>mode</th><th>sev</th><th>w</th><th>tilt°</th><th>slip</th><th>vis</th></tr></thead>
         <tbody></tbody>
-      </table>
+      </table></div>
       <div class="small muted" style="margin-top:6px">Ranked by severity + log-plausibility under the selected prior. Click to replay.</div>
     </div>
 

@@ -452,11 +452,16 @@ class SaveBody(BaseModel):
     name: str = "campaign"
 
 
+def _run_path(name: str) -> Path:
+    safe = "".join(ch for ch in name if ch.isalnum() or ch in "-_") or "campaign"
+    return RUNS / f"{safe}.npz"
+
+
 @app.post("/api/save")
 async def api_save(body: SaveBody) -> JSONResponse:
     _not_busy()
-    safe = "".join(ch for ch in body.name if ch.isalnum() or ch in "-_") or "campaign"
-    path = RUNS / f"{safe}.npz"
+    path = _run_path(body.name)
+    safe = path.stem
     await asyncio.to_thread(STATE.campaign.save, path)
     C.write_summary_txt(STATE.campaign, RUNS / f"{safe}.txt")
     STATE.emit("log", msg=f"saved {path} ({STATE.campaign.n} episodes)")
@@ -466,7 +471,7 @@ async def api_save(body: SaveBody) -> JSONResponse:
 @app.post("/api/load")
 async def api_load(body: SaveBody) -> JSONResponse:
     _not_busy()
-    path = RUNS / f"{body.name}.npz"
+    path = _run_path(body.name)
     if not path.exists():
         raise HTTPException(404, f"{path} not found")
     STATE.campaign = await asyncio.to_thread(C.Campaign.load, path)

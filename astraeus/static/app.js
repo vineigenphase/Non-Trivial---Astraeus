@@ -131,12 +131,15 @@ function renderCampaign(summ) {
     const dim = !r.reliable;
     tr.style.opacity = dim ? 0.55 : 1;
     let note = "";
-    if (cov < 0.5) note = ` <span class="chip" title="${((1 - cov) * 100).toFixed(0)}% of this prior's mass lies outside the simulated support">out of support</span>`;
+    const outside = cov < 0.5;
+    if (outside) note = ` <span class="chip" title="${((1 - cov) * 100).toFixed(0)}% of this prior's mass lies outside the simulated support">out of support</span>`;
     else if (r.ess < S.meta.min_ess) note = ` <span class="chip">ESS&lt;${S.meta.min_ess}</span>`;
-    tr.innerHTML = `<td title="${r.label}">${r.prior}${note}</td><td class="num">${r.p_fail === null ? "—" : fmt(r.p_fail, 3)}</td>
-      <td class="num">${r.ci[0] === null ? "—" : `[${fmt(r.ci[0], 3)}, ${fmt(r.ci[1], 3)}]`}</td>
+    const pf = outside || r.p_fail === null ? `<span class="muted" title="not estimable from this proposal">n/a</span>` : fmt(r.p_fail, 3);
+    const ci = outside || r.ci[0] === null ? "—" : `[${fmt(r.ci[0], 3)}, ${fmt(r.ci[1], 3)}]`;
+    tr.innerHTML = `<td title="${r.label}">${r.prior}${note}</td><td class="num">${pf}</td>
+      <td class="num">${ci}</td>
       <td class="num">${fmt(r.ess, 0)}<span class="muted">/${r.n}</span></td>
-      <td>${r.top_mode ? `<span class="chip" style="border-color:${MODE_COL[r.top_mode]};color:${MODE_COL[r.top_mode]}">${r.top_mode}</span>` : "—"}</td>`;
+      <td>${!outside && r.top_mode ? `<span class="chip" style="border-color:${MODE_COL[r.top_mode]};color:${MODE_COL[r.top_mode]}">${r.top_mode}</span>` : "—"}</td>`;
     tb.appendChild(tr);
   }
   renderShift(summ);
@@ -242,7 +245,15 @@ $("#btn-run").addEventListener("click", async () => {
   finally { setBusy(null); $("#run-prog").style.width = "0"; }
 });
 $("#btn-reset").addEventListener("click", async () => { const s = await api("/api/campaign/reset", { seed: parseInt($("#seed").value || "0", 10) }); renderCampaign(s); S.cem = []; drawCem(); });
-$("#btn-save").addEventListener("click", async () => { const r = await api("/api/save", { name: "campaign" }); log(`saved ${r.saved}`); });
+function runName() { return ($("#run-name").value || "campaign").trim(); }
+$("#btn-save").addEventListener("click", async () => {
+  try { const r = await api("/api/save", { name: runName() }); log(`saved ${r.saved} (${r.n} episodes)`); }
+  catch (e) { log("save: " + e.message); }
+});
+$("#btn-load").addEventListener("click", async () => {
+  try { const r = await api("/api/load", { name: runName() }); renderCampaign(await api("/api/campaign")); S.cem = []; drawCem(); log(`loaded ${r.loaded} (${r.n} episodes)`); }
+  catch (e) { log("load: " + e.message); }
+});
 $("#btn-sample").addEventListener("click", async () => {
   const p = $("#sample-prior").value;
   try {
@@ -253,7 +264,7 @@ $("#btn-sample").addEventListener("click", async () => {
 });
 $("#btn-resim").addEventListener("click", simulateWhatIf);
 $("#seed").addEventListener("change", simulateWhatIf);
-function setBusy(b) { S.busy = b; $("#btn-run").disabled = $("#btn-cem").disabled = $("#btn-reset").disabled = !!b; }
+function setBusy(b) { S.busy = b; for (const id of ["#btn-run", "#btn-cem", "#btn-reset", "#btn-save", "#btn-load"]) $(id).disabled = !!b; }
 
 /* ----------------------------------------------------------- websocket */
 function connectWs() {
