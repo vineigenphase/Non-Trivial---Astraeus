@@ -210,6 +210,12 @@ def _prior(name: str) -> PR.Prior:
     return PR.PRIORS[name]
 
 
+def _camera(name: str) -> str:
+    if name not in R.CAMERAS:
+        raise HTTPException(400, f"unknown camera {name!r}; choose from {list(R.CAMERAS)}")
+    return name
+
+
 def _not_busy() -> None:
     if STATE.busy:
         raise HTTPException(409, f"engine busy: {STATE.busy}")
@@ -323,6 +329,7 @@ def _png(im) -> Response:
 @app.get("/api/episode/{i}/frame.png")
 async def api_frame(i: int, camera: str = "chase", frame: int = -1, w: int = 960, h: int = 540,
                     q: int = 1, hud: int = 1) -> Response:
+    camera = _camera(camera)
     res = await asyncio.to_thread(STATE.replay, i)
     w, h, q = min(max(w, 160), 1920), min(max(h, 90), 1080), 1 if q < 2 else 2
     im = await asyncio.to_thread(R.render_episode, res, camera, frame, (w, h), q, bool(hud))
@@ -333,6 +340,7 @@ async def api_frame(i: int, camera: str = "chase", frame: int = -1, w: int = 960
 async def api_frame_json(i: int, camera: str = "chase", frame: int = -1, w: int = 960, h: int = 540,
                          q: int = 1) -> JSONResponse:
     """Provider-routed frame (local or Reactor) with provenance metadata."""
+    camera = _camera(camera)
     res = await asyncio.to_thread(STATE.replay, i)
     fr = await asyncio.to_thread(STATE.provider.render, res, frame, camera, (w, h), 1 if q < 2 else 2)
     return JSONResponse(fr.to_dict())
@@ -340,6 +348,7 @@ async def api_frame_json(i: int, camera: str = "chase", frame: int = -1, w: int 
 
 @app.get("/api/episode/{i}/sheet.png")
 async def api_sheet(i: int, n: int = 6, camera: str = "chase") -> Response:
+    camera = _camera(camera)
     res = await asyncio.to_thread(STATE.replay, i)
     im = await asyncio.to_thread(R.render_contact_sheet, res, n, (640, 360), camera)
     return _png(im)
@@ -383,6 +392,7 @@ async def api_whatif_frame(k_soil: float, theta_r: float, r_terrain: float, rho_
                            sun_e: float, sun_psi: float, tau_dust: float, seed: int = 0, camera: str = "chase",
                            frame: int = -1, w: int = 960, h: int = 540, q: int = 1, hud: int = 1) -> Response:
     """GET form of the what-if render so <img src> can address it directly."""
+    camera = _camera(camera)
     x = _whatif_x(k_soil, theta_r, r_terrain, rho_rock, slope_deg, sun_e, sun_psi, tau_dust)
     res = await asyncio.to_thread(RV.simulate_one, x, seed, False)
     w, h = min(max(w, 160), 1920), min(max(h, 90), 1080)
@@ -394,6 +404,7 @@ async def api_whatif_frame(k_soil: float, theta_r: float, r_terrain: float, rho_
 async def api_whatif_sheet(k_soil: float, theta_r: float, r_terrain: float, rho_rock: float, slope_deg: float,
                            sun_e: float, sun_psi: float, tau_dust: float, seed: int = 0, camera: str = "chase",
                            n: int = 6) -> Response:
+    camera = _camera(camera)
     x = _whatif_x(k_soil, theta_r, r_terrain, rho_rock, slope_deg, sun_e, sun_psi, tau_dust)
     res = await asyncio.to_thread(RV.simulate_one, x, seed, False)
     im = await asyncio.to_thread(R.render_contact_sheet, res, min(max(n, 2), 12), (640, 360), camera)
