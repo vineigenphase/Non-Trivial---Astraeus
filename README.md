@@ -135,7 +135,7 @@ estimates; CEM and external rows are kept for replay, ranking and cross-simulato
 
 - **`/`** — the world model. A WebGL view of the exact height field the simulator used, rocks, craters,
   goal ring, true path and VO estimate; eight live sliders for `x` (moving one re-simulates the episode
-  in ~50 ms); prior selector; elite-failure table; renderer frames from four cameras; campaign runner
+  in 0.1–0.6 s); prior selector; elite-failure table; renderer frames from four cameras; campaign runner
   and CEM launcher with progress over WebSocket.
 - **`/internals`** — the engine room: importance weights, ESS per prior, support coverage, weighted
   marginals, dimension sensitivity, shift matrix and CEM traces.

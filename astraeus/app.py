@@ -6,7 +6,7 @@ Everything runs locally with the software renderer by default. The browser gets
 a WebGL view of the exact terrain the simulator used (rasterised from the same
 deterministic height field), the true and estimated trajectories, and PNG frames
 from the renderer or the Reactor provider. The eight disturbance dimensions are
-live sliders: moving one re-simulates the episode (~50 ms) and the world updates.
+live sliders: moving one re-simulates the episode (a few hundred ms) and the world updates.
 
 Endpoints
     GET  /                          world model UI
