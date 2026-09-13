@@ -28,8 +28,8 @@ function render() {
     const cov = META.support_coverage[p.name];
     const tr = document.createElement("tr");
     tr.innerHTML = r ? `<td title="${p.label}">${p.name}</td><td class="num" style="${cov < 0.5 ? "color:var(--red)" : ""}">${fmt(cov, 3)}</td><td class="num">${fmt(r.ess, 1)}</td><td class="num">${fmt(r.ess_frac, 3)}</td>
-      <td class="num" style="${r.max_weight_frac > 0.1 ? "color:var(--amber)" : ""}">${fmt(r.max_weight_frac, 4)}</td><td class="num">${fmt(r.p_fail, 4)}</td>
-      <td class="num">${r.ci[0] === null ? "—" : `[${fmt(r.ci[0], 3)}, ${fmt(r.ci[1], 3)}]`}</td><td>${r.reliable ? "<span style='color:var(--green)'>yes</span>" : "<span style='color:var(--red)'>no</span>"}</td>`
+      <td class="num" style="${r.max_weight_frac > 0.1 ? "color:var(--amber)" : ""}">${fmt(r.max_weight_frac, 4)}</td><td class="num">${cov < 0.5 ? "<span class='muted' title='not estimable: prior mass lies outside the simulated support'>n/a</span>" : fmt(r.p_fail, 4)}</td>
+      <td class="num">${cov < 0.5 || r.ci[0] === null ? "—" : `[${fmt(r.ci[0], 3)}, ${fmt(r.ci[1], 3)}]`}</td><td>${r.reliable ? "<span style='color:var(--green)'>yes</span>" : "<span style='color:var(--red)'>no</span>"}</td>`
       : `<td>${p.name}</td><td class="num">${fmt(cov, 3)}</td><td colspan="6" class="muted">no MC episodes yet</td>`;
     tb.appendChild(tr);
   }

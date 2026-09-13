@@ -355,7 +355,14 @@ def _validate_x(x: Dict[str, float]) -> np.ndarray:
     missing = [d for d in DIMS if d not in x]
     if missing:
         raise HTTPException(400, f"missing dimensions: {missing}")
-    return PR.from_dict(x)
+    arr = PR.from_dict(x)
+    if not np.all(np.isfinite(arr)):
+        raise HTTPException(400, "all dimensions must be finite numbers")
+    bad = [f"{d}={arr[i]:g} not in [{BOUNDS[d][0]:g}, {BOUNDS[d][1]:g}]"
+           for i, d in enumerate(DIMS) if not (BOUNDS[d][0] - 1e-9 <= arr[i] <= BOUNDS[d][1] + 1e-9)]
+    if bad:
+        raise HTTPException(400, "out of simulated support: " + "; ".join(bad))
+    return arr
 
 
 @app.post("/api/simulate")
