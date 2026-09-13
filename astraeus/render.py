@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import perception as P
 from . import rover as RV
 from .priors import DIMS, UNITS
-from .terrain import GOAL_X
+from .terrain import GOAL_X, value_noise
 
 # --------------------------------------------------------------------------- setup
 DEM_RES = 0.20                       # m per DEM cell for ray marching
@@ -157,6 +157,12 @@ def camera_rays(scene: Scene, mode: str, w: int, h: int, fov_deg: float = 60.0):
         eye = np.array([px, py, pz + WHEEL_R + 2.12]) + 0.95 * fwd
         look = eye + 8.0 * fwd - np.array([0, 0, 1.4])
         fov_deg = 2 * P.SENSOR_HALF_FOV_DEG * 0.85
+    elif mode == "cinematic":
+        # low three-quarter front view; the sun rakes across the frame from the side
+        side = np.array([-fwd[1], fwd[0], 0.0])
+        eye = np.array([px, py, pz]) + 5.6 * fwd + 4.2 * side + np.array([0, 0, 1.9])
+        look = np.array([px, py, pz + 0.55]) - 2.0 * fwd - 0.6 * side
+        fov_deg = 44.0
     elif mode == "overview":
         eye = np.array([GOAL_X * 0.5 - 4.0, -24.0, 14.0])
         look = np.array([GOAL_X * 0.5, 0.0, 0.0])
@@ -368,12 +374,65 @@ def _headlights(scene: Scene, p: np.ndarray, n: np.ndarray, d: np.ndarray) -> np
 
 
 def _stars(d: np.ndarray, seed: int) -> np.ndarray:
-    """Sparse deterministic star field on the sky directions."""
-    q = np.floor(d * 420.0).astype(np.int64)
+    """Sparse deterministic star field on the sky directions (two magnitude classes)."""
     s = np.int64((int(seed) * 2654435761) & 0x7FFFFFFFFFFFFFFF)
-    hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ s
-    u = ((hsh & 0xFFFFFF) / float(0xFFFFFF))
-    return np.where(u > 0.9994, 0.3 + 1.2 * (u - 0.9994) / 0.0006, 0.0)
+    out = np.zeros(d.shape[0])
+    for scale, thresh, gain in ((420.0, 0.9994, 1.2), (900.0, 0.9990, 0.35)):
+        q = np.floor(d * scale).astype(np.int64)
+        hsh = (q[..., 0] * 73856093) ^ (q[..., 1] * 19349663) ^ (q[..., 2] * 83492791) ^ s
+        u = ((hsh & 0xFFFFFF) / float(0xFFFFFF))
+        out += np.where(u > thresh, 0.15 + gain * (u - thresh) / (1 - thresh), 0.0)
+    return out
+
+
+def _regolith_detail(xy: np.ndarray, seed: int, fade: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Multi-octave regolith texture: (albedo factor, height-detail gradient (N, 2)).
+
+    Octaves are faded with distance so the fine grain does not alias far away."""
+    # (spatial frequency 1/m, height amplitude m): metre-scale undulation down to cm-scale grain
+    octaves = ((0.35, 0.060), (1.6, 0.020), (6.5, 0.0055), (23.0, 0.0012))
+
+    def field(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        acc = np.zeros_like(x)
+        for k, (f, amp) in enumerate(octaves):
+            sd = np.int64((seed * 31 + 7 * k) & 0x7FFFFFFF)
+            acc += amp * value_noise(x * f, y * f, sd) * fade ** k
+        return acc
+
+    h0 = field(xy[:, 0], xy[:, 1])
+    e = 0.02
+    gx = (field(xy[:, 0] + e, xy[:, 1]) - h0) / e
+    gy = (field(xy[:, 0], xy[:, 1] + e) - h0) / e
+    albedo = 1.0 + 2.2 * h0 / octaves[0][1] * 0.08
+    return albedo, np.stack([gx, gy], 1)
+
+
+def _ambient_occlusion(scene: Scene, p: np.ndarray) -> np.ndarray:
+    """Horizon-based occlusion of the sky hemisphere in [0, 1] (1 = fully open)."""
+    occ = np.zeros(len(p))
+    n_dir = 6
+    for r in (0.7, 1.8, 4.5):
+        for k in range(n_dir):
+            a = 2 * math.pi * k / n_dir + 0.3 * r
+            hgt = scene.height(p[:, 0] + r * math.cos(a), p[:, 1] + r * math.sin(a))
+            hgt = np.where(np.isfinite(hgt), hgt, p[:, 2])
+            occ += np.clip((hgt - p[:, 2]) / r, 0.0, 1.0)
+    return 1.0 - 0.75 * occ / (3 * n_dir)
+
+
+def _offset_path(path: np.ndarray, offset: float) -> np.ndarray:
+    """Polyline shifted sideways by `offset` (left positive) - one wheel track."""
+    if len(path) < 2:
+        return path
+    d = np.gradient(path, axis=0)
+    d /= np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+    perp = np.stack([-d[:, 1], d[:, 0]], 1)
+    return path + offset * perp
+
+
+def _filmic(x: np.ndarray) -> np.ndarray:
+    """ACES-style filmic tone curve (Narkowicz fit), keeps highlights from greying out."""
+    return np.clip((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0)
 
 
 def _path_mask(hit_xy: np.ndarray, path: np.ndarray, width: float, dashed: bool = False) -> np.ndarray:
@@ -412,10 +471,15 @@ def _path_mask(hit_xy: np.ndarray, path: np.ndarray, width: float, dashed: bool 
 
 
 def render_frame(scene: Scene, camera: str = "chase", size: Tuple[int, int] = (1280, 720),
-                 hud: bool = True, quality: int = 1) -> Image.Image:
-    """Render one frame. quality=1 full, 2 renders at half resolution and upsamples."""
+                 hud: bool = True, quality: int = 1, supersample: int = 1) -> Image.Image:
+    """Render one frame.
+
+    quality=1 full, 2 renders at half resolution and upsamples (interactive use).
+    supersample=k renders at k x k the pixel count and downsamples with Lanczos
+    (anti-aliased stills for documentation; cost grows as k^2)."""
     W, H = size
-    w, h = W // quality, H // quality
+    ss = max(1, int(supersample))
+    w, h = W * ss // quality, H * ss // quality
     o, D = camera_rays(scene, camera, w, h)
     d = D.reshape(-1, 3)
     N = d.shape[0]
@@ -430,10 +494,23 @@ def render_frame(scene: Scene, camera: str = "chase", size: Tuple[int, int] = (1
     hit = hit_rov | hit_ter
     p = o[None, :] + np.where(np.isfinite(t), t, 0.0)[:, None] * d
 
-    # normals
+    # normals (+ regolith micro-relief bump on the terrain, faded with distance)
     n = np.zeros_like(d)
     n[hit_ter] = scene.normal(p[hit_ter, 0], p[hit_ter, 1])
     n[hit_rov] = n_rov[hit_rov]
+    grain = np.ones(N)
+    if hit_ter.any():
+        fade = np.exp(-t[hit_ter] / 45.0)
+        alb, grad = _regolith_detail(p[hit_ter, :2], scene.seed, fade)
+        grain[hit_ter] = alb
+        bump = 0.9 * fade[:, None] * grad
+        nt = n[hit_ter].copy()
+        nt[:, 0] -= bump[:, 0]
+        nt[:, 1] -= bump[:, 1]
+        n[hit_ter] = nt / np.linalg.norm(nt, axis=1, keepdims=True)
+        ao = _ambient_occlusion(scene, p[hit_ter])
+    else:
+        ao = np.ones(0)
     # shadows for every hit point (rover included: it sits in terrain shadow too)
     sh = np.ones(N)
     if hit.any():
@@ -444,10 +521,8 @@ def render_frame(scene: Scene, camera: str = "chase", size: Tuple[int, int] = (1
     phase = np.arccos(np.clip((-d) @ sun, -1.0, 1.0))
 
     col = np.zeros((N, 3))
-    # regolith — slight per-pixel albedo variation from the height field detail
     reg = _brdf_regolith(mu0, mu, phase) * sh
     tint = np.array([1.0, 0.97, 0.92])
-    grain = 0.9 + 0.2 * np.mod(np.abs(p[:, 0] * 7.31 + p[:, 1] * 3.17), 1.0)
     col[hit_ter] = (reg[hit_ter] * grain[hit_ter])[:, None] * tint[None, :]
 
     # driving lights on the terrain (rover surfaces are excluded: no self-illumination)
@@ -457,23 +532,44 @@ def render_frame(scene: Scene, camera: str = "chase", size: Tuple[int, int] = (1
     # rover materials: 1 body (white/gold MLI), 2 structure (dark), 3 solar (blue-black), 4 wheels
     mats = {1: np.array([0.85, 0.80, 0.62]), 2: np.array([0.22, 0.22, 0.24]),
             3: np.array([0.10, 0.12, 0.28]), 4: np.array([0.30, 0.30, 0.30])}
-    for m_id, albedo in mats.items():
-        sel = hit_rov & (mat == m_id)
-        if sel.any():
-            diff = albedo[None, :] * (mu0[sel] * sh[sel])[:, None]
-            hvec = sun[None, :] - d[sel]
-            hvec /= np.linalg.norm(hvec, axis=1, keepdims=True)
-            spec = np.clip((n[sel] * hvec).sum(1), 0, 1) ** (60 if m_id == 3 else 18) * sh[sel]
-            col[sel] = diff + (0.6 if m_id in (1, 3) else 0.15) * spec[:, None]
-    # ambient: earthshine / multiple scattering is tiny on the Moon; dust adds some
-    amb = 0.012 + 0.10 * tau
-    col[hit] += amb * np.where(hit_rov[hit, None], 0.6, ALBEDO * 2.5) * tint[None, :]
+    if hit_rov.any():
+        Rr = _rot(*scene.rover_att)
+        pl = (p[hit_rov] - (scene.rover_pos + np.array([0, 0, WHEEL_R]))[None, :]) @ Rr
+        tex = np.ones(N)
+        m_rov = mat[hit_rov]
+        # MLI blanket seams on the body, cell grid on the solar array, tread on the wheels
+        seam = (np.mod(pl[:, 2] + 0.02, 0.11) < 0.010) | (np.mod(pl[:, 1] + 0.05, 0.31) < 0.012)
+        cell = (np.mod(pl[:, 0] + 0.03, 0.16) < 0.012) | (np.mod(pl[:, 1] + 0.03, 0.16) < 0.012)
+        ang_w = np.arctan2(pl[:, 2], pl[:, 0] - np.round(pl[:, 0] / HALF_LEN) * HALF_LEN)
+        tread = np.mod(ang_w, 2 * math.pi / 24) < (2 * math.pi / 24) * 0.35
+        tex_r = np.where(m_rov == 1, np.where(seam, 0.72, 1.0), 1.0)
+        tex_r = np.where(m_rov == 3, np.where(cell, 2.6, 1.0), tex_r)
+        tex_r = np.where(m_rov == 4, np.where(tread, 0.7, 1.0), tex_r)
+        tex[hit_rov] = tex_r
+        for m_id, albedo in mats.items():
+            sel = hit_rov & (mat == m_id)
+            if sel.any():
+                diff = albedo[None, :] * (mu0[sel] * sh[sel] * tex[sel])[:, None]
+                hvec = sun[None, :] - d[sel]
+                hvec /= np.linalg.norm(hvec, axis=1, keepdims=True)
+                spec = np.clip((n[sel] * hvec).sum(1), 0, 1) ** (60 if m_id == 3 else 18) * sh[sel]
+                col[sel] = diff + (0.6 if m_id in (1, 3) else 0.15) * spec[:, None]
+    # ambient: earthshine (faintly blue) plus dust multiple scattering; occluded in hollows
+    amb = 0.022 + 0.10 * tau
+    amb_col = np.array([0.78, 0.86, 1.0]) * (1 - min(tau, 1.0) * 0.5) + tint * min(tau, 1.0) * 0.5
+    amb_scale = np.full(N, 0.6)
+    amb_scale[hit_ter] = ALBEDO * 2.5 * ao * grain[hit_ter]
+    col[hit] += amb * amb_scale[hit, None] * amb_col[None, :]
 
-    # painted ground overlays: true path (cyan), VO estimate (amber, dashed), goal disc
+    # wheel ruts (compacted, shadowed regolith) and painted overlays: true path (cyan),
+    # VO estimate (amber, dashed), goal ring
     if hit_ter.any():
         hxy = p[hit_ter, :2]
-        m_true = _path_mask(hxy, scene.path_true, 0.24)
-        m_est = _path_mask(hxy, scene.path_est, 0.16, dashed=True)
+        rut = np.maximum(_path_mask(hxy, _offset_path(scene.path_true, HALF_WID), WHEEL_W * 0.55),
+                         _path_mask(hxy, _offset_path(scene.path_true, -HALF_WID), WHEEL_W * 0.55))
+        col[hit_ter] *= (1.0 - 0.45 * rut)[:, None]
+        m_true = _path_mask(hxy, scene.path_true, 0.12)
+        m_est = _path_mask(hxy, scene.path_est, 0.09, dashed=True)
         gdist = np.linalg.norm(hxy - np.array([GOAL_X, 0.0]), axis=1)
         ring = np.clip(1.0 - np.abs(gdist - RV.GOAL_TOL) / 0.12, 0.0, 1.0)
         base = col[hit_ter]
@@ -523,15 +619,19 @@ def render_frame(scene: Scene, camera: str = "chase", size: Tuple[int, int] = (1
         g = (0.12 * np.exp(-ang / 0.30) + 0.02 * np.exp(-ang / 0.6)) * np.clip(1 - ang / math.radians(40), 0, 1)
         col += (g * (0.5 + tau))[:, None] * np.array([1.0, 0.9, 0.75])
 
-    # tone map + gamma: exposure set for a sunlit surface at this elevation
-    exposure = 1.6 / max(0.35, math.sqrt(max(sun[2], 0.02)) * 2.2)
-    col = col * exposure
-    col = col / (1.0 + col)                       # Reinhard
+    # tone map + gamma: exposure set for a sunlit surface at this elevation, filmic curve,
+    # gentle optical vignette
+    exposure = 1.15 / max(0.35, math.sqrt(max(sun[2], 0.02)) * 2.2)
+    col = _filmic(col * exposure)
+    vx = (np.arange(w) + 0.5) / w * 2 - 1
+    vy = (np.arange(h) + 0.5) / h * 2 - 1
+    r2 = (vx[None, :] ** 2 + vy[:, None] ** 2).reshape(-1)
+    col *= (1.0 - 0.18 * r2 * r2)[:, None]
     col = np.clip(col, 0, 1) ** (1 / 2.2)
-    img = (col.reshape(h, w, 3) * 255).astype(np.uint8)
+    img = (col.reshape(h, w, 3) * 255 + 0.5).astype(np.uint8)
     im = Image.fromarray(img, "RGB")
-    if quality != 1:
-        im = im.resize((W, H), Image.BICUBIC)
+    if (w, h) != (W, H):
+        im = im.resize((W, H), Image.LANCZOS if ss > 1 else Image.BICUBIC)
     if hud:
         _draw_hud(im, scene, camera)
     return im
@@ -588,9 +688,14 @@ def _draw_hud(im: Image.Image, s: Scene, camera: str) -> None:
     oc = {"success": (90, 230, 120), "driving": (200, 205, 215), "stuck": (255, 150, 60),
           "tip_over": (255, 80, 80), "collision": (255, 90, 140), "nav_miss": (255, 210, 70),
           "timeout": (170, 170, 190)}[s.outcome]
-    draw.text((pad, H - bar_h + bar_h // 2 - f_big.size // 2), f"ASTRAEUS  ·  {s.outcome.upper()}",
-              font=f_big, fill=oc + (255,))
-    foot = f"seed {s.seed}   frame {s.frame + 1}/{s.n_frames}   cam {camera}   software render (synthetic)"
+    title = f"ASTRAEUS  ·  {s.outcome.upper()}"
+    draw.text((pad, H - bar_h + bar_h // 2 - f_big.size // 2), title, font=f_big, fill=oc + (255,))
+    # footer fields drop from the right until the line fits beside the title (narrow frames)
+    fields = [f"seed {s.seed}", f"frame {s.frame + 1}/{s.n_frames}", f"cam {camera}", "software render (synthetic)"]
+    avail = W - 3 * pad - draw.textlength(title, font=f_big)
+    while len(fields) > 1 and draw.textlength("   ".join(fields), font=f_small) > avail:
+        fields.pop()
+    foot = "   ".join(fields)
     tw2 = draw.textlength(foot, font=f_small)
     draw.text((W - pad - tw2, H - bar_h + bar_h // 2 - f_small.size // 2), foot, font=f_small,
               fill=(170, 178, 192, 255))
@@ -604,8 +709,43 @@ def _draw_hud(im: Image.Image, s: Scene, camera: str) -> None:
         ly += lh
 
 
+def draw_caption(im: Image.Image, s: Scene, title: str = "ASTRAEUS", subtitle: str = "") -> None:
+    """Minimal lower-third for documentation stills: wordmark, outcome, and the
+    disturbance vector on one line over a soft gradient. Use instead of the HUD."""
+    W, H = im.size
+    band = int(H * 0.26)
+    grad = Image.new("L", (1, band))
+    for y in range(band):
+        grad.putpixel((0, y), int(225 * (y / band) ** 1.4))
+    grad = grad.resize((W, band))
+    dark = Image.new("RGBA", (W, band), (3, 4, 7, 255))
+    dark.putalpha(grad)
+    im.paste(dark, (0, H - band), dark)
+    draw = ImageDraw.Draw(im, "RGBA")
+    f_title = _font(False, max(18, H // 22))
+    f_sub = _font(False, max(12, H // 46))
+    f_mono = _font(True, max(11, H // 58))
+    pad = W // 40
+    y0 = H - band + int(band * 0.34)
+    oc = {"success": (90, 230, 120), "driving": (200, 205, 215), "stuck": (255, 150, 60),
+          "tip_over": (255, 80, 80), "collision": (255, 90, 140), "nav_miss": (255, 210, 70),
+          "timeout": (170, 170, 190)}[s.outcome]
+    draw.text((pad, y0), title, font=f_title, fill=(240, 242, 246, 255))
+    tw = draw.textlength(title, font=f_title)
+    draw.text((pad + tw + f_title.size * 0.6, y0 + f_title.size * 0.18), s.outcome.replace("_", " ").upper(),
+              font=_font(False, max(14, H // 30)), fill=oc + (255,))
+    if subtitle:
+        draw.text((pad, y0 + f_title.size * 1.25), subtitle, font=f_sub, fill=(190, 198, 212, 255))
+    xs = "   ".join(f"{_LABELS[d]} {s.params[d]:.3g}" for d in DIMS)
+    xw = draw.textlength(xs, font=f_mono)
+    draw.text((W - pad - xw, H - pad - f_mono.size * 1.1), xs, font=f_mono, fill=(160, 170, 188, 255))
+    foot = f"seed {s.seed} · t = {s.t:.1f} s · deterministic software render"
+    draw.text((W - pad - draw.textlength(foot, font=f_mono), H - pad - f_mono.size * 2.5), foot,
+              font=f_mono, fill=(120, 130, 150, 255))
+
+
 # --------------------------------------------------------------------------- helpers
-CAMERAS = ("chase", "rover_cam", "overview", "orbit")
+CAMERAS = ("chase", "rover_cam", "overview", "orbit", "cinematic")
 
 
 def to_png_bytes(im: Image.Image) -> bytes:
@@ -615,8 +755,10 @@ def to_png_bytes(im: Image.Image) -> bytes:
 
 
 def render_episode(res: RV.EpisodeResult, camera: str = "chase", frame: int = -1,
-                   size: Tuple[int, int] = (1280, 720), quality: int = 1, hud: bool = True) -> Image.Image:
-    return render_frame(Scene.from_result(res, frame), camera, size, hud=hud, quality=quality)
+                   size: Tuple[int, int] = (1280, 720), quality: int = 1, hud: bool = True,
+                   supersample: int = 1) -> Image.Image:
+    return render_frame(Scene.from_result(res, frame), camera, size, hud=hud, quality=quality,
+                        supersample=supersample)
 
 
 def render_contact_sheet(res: RV.EpisodeResult, n: int = 6, size: Tuple[int, int] = (640, 360),
