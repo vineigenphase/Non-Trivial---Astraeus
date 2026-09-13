@@ -688,9 +688,14 @@ def _draw_hud(im: Image.Image, s: Scene, camera: str) -> None:
     oc = {"success": (90, 230, 120), "driving": (200, 205, 215), "stuck": (255, 150, 60),
           "tip_over": (255, 80, 80), "collision": (255, 90, 140), "nav_miss": (255, 210, 70),
           "timeout": (170, 170, 190)}[s.outcome]
-    draw.text((pad, H - bar_h + bar_h // 2 - f_big.size // 2), f"ASTRAEUS  ·  {s.outcome.upper()}",
-              font=f_big, fill=oc + (255,))
-    foot = f"seed {s.seed}   frame {s.frame + 1}/{s.n_frames}   cam {camera}   software render (synthetic)"
+    title = f"ASTRAEUS  ·  {s.outcome.upper()}"
+    draw.text((pad, H - bar_h + bar_h // 2 - f_big.size // 2), title, font=f_big, fill=oc + (255,))
+    # footer fields drop from the right until the line fits beside the title (narrow frames)
+    fields = [f"seed {s.seed}", f"frame {s.frame + 1}/{s.n_frames}", f"cam {camera}", "software render (synthetic)"]
+    avail = W - 3 * pad - draw.textlength(title, font=f_big)
+    while len(fields) > 1 and draw.textlength("   ".join(fields), font=f_small) > avail:
+        fields.pop()
+    foot = "   ".join(fields)
     tw2 = draw.textlength(foot, font=f_small)
     draw.text((W - pad - tw2, H - bar_h + bar_h // 2 - f_small.size // 2), foot, font=f_small,
               fill=(170, 178, 192, 255))
